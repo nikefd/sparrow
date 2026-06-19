@@ -33,9 +33,33 @@ drawer, streaming replies, tool-step chips, and citations.
 | `title` | `AI Assistant` | dock header title |
 | `hint` | `''` | one-line hint shown above the messages |
 | `accent` | `#7c3aed` | theme color (button, user bubble, focus) |
-| `placeholder` | `Type a message…` | input placeholder |
 | `storageKey` | `sparrow_conv_id` | localStorage key for the active conversation id |
 | `fabIcon` | `💬` | floating-button glyph |
+| `i18n` | English strings | override any user-facing string to localize (see below) |
+
+## Localization (`i18n`)
+
+All user-facing strings default to English. Override just the ones you need —
+your object is merged over the defaults:
+
+```js
+SparrowChat.mount({
+  endpoint: '/api/agent/chat',
+  i18n: {
+    send: '发送',
+    placeholder: '输入消息…',
+    history: '历史',
+    newChat: '新对话',
+    thinking: '思考中',
+    sources: '来源',
+  },
+});
+```
+
+Keys: `send` · `placeholder` · `history` · `newChat` · `resize` · `close` ·
+`back` · `thinking` · `emptyNew` · `newStarted` · `loading` ·
+`noConversations` · `loadFailed` · `emptyConversation` · `sources` ·
+`messages` · `untitled` · `del` · `justNow` · `minAgo` · `hourAgo` · `dayAgo`.
 
 ## Expected server contract
 
