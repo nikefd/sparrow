@@ -1,6 +1,6 @@
 [project]
 name = "sparrow-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "A small-but-complete agent harness: ReAct loop, tool injection, three-tier memory, restricted-expression panels. Zero heavy deps."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -29,6 +29,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["sparrow*"]
+
+[tool.setuptools.package-data]
+"sparrow.web" = ["*.js", "*.md"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

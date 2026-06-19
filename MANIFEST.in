@@ -1,0 +1,3 @@
+include LICENSE README.md README.zh-CN.md
+recursive-include web *.js *.md
+recursive-include examples *.py

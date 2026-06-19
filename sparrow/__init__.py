@@ -23,7 +23,7 @@ from .llm import chat, configure, LLMError
 from . import panel_data
 from .expr import safe_eval, is_safe_expr
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "AgentConfig", "Tool", "ToolRegistry", "tool",
