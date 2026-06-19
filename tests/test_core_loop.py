@@ -100,7 +100,7 @@ def test_tool_then_final_collects_citation():
     state, events = drive(state, deps)
     assert state.status == "done"
     assert "demo" in state.final["citations"]
-    assert {"tool_result", "final"} <= {e.type for e in events}
+    assert {"tool_call", "tool_result", "final"} <= {e.type for e in events}
 
 
 def test_length_triggers_continuation():

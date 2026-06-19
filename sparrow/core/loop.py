@@ -114,6 +114,10 @@ def _run_calls(state: RunState, calls: list, deps: Deps, events: list):
         if tool and getattr(tool, "writes", False) and isinstance(call.arguments, dict):
             call.arguments.setdefault("conversation_id", state.run_id)
 
+        label = tool.label if tool and tool.label else call.name
+        events.append(Event("tool_call", {"name": call.name, "label": label,
+                                          "arguments": call.arguments}))
+
         if deps.approval_required(call, tool):
             paused = replace(state, pending_approval=call, status="awaiting_approval")
             return paused, events + [Event("awaiting_approval",
