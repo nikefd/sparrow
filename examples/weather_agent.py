@@ -4,15 +4,15 @@ Run (needs an OpenAI-compatible key):
     export SPARROW_LLM_API_KEY=sk-...        # e.g. a DeepSeek key
     python examples/weather_agent.py
 
-It shows the whole shape: define tools with @tool, assemble an AgentConfig,
-run the Harness, and consume the event stream.
+Shows the whole shape: define tools with @tool, assemble an AgentConfig, run the
+Agent, and consume the event stream.
 """
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from sparrow import tool, AgentConfig, Harness
+from sparrow import tool, AgentConfig, Agent
 
 
 # ── 1. Define tools (your domain) ────────────────────────────────────
@@ -41,17 +41,16 @@ config = AgentConfig(
 # ── 3. Run and stream events ─────────────────────────────────────────
 def main():
     messages = [{"role": "user", "content": "What's the weather in Beijing?"}]
-    for event in Harness(config).run(messages):
-        etype = event["type"]
-        if etype == "tool_call":
-            print(f"  → calling {event['name']}({event['arguments']})")
-        elif etype == "tool_result":
-            print(f"  ← {event['summary']}")
-        elif etype == "final":
-            print(f"\nAnswer: {event['content']}")
-            print(f"Sources: {event['citations']}")
-        elif etype == "error":
-            print(f"Error: {event['message']}")
+    for event in Agent(config).run(messages):
+        if event.type == "tool_call":
+            print(f"  → calling {event.data['name']}({event.data['arguments']})")
+        elif event.type == "tool_result":
+            print(f"  ← {event.data['summary']}")
+        elif event.type == "final":
+            print(f"\nAnswer: {event.data['content']}")
+            print(f"Sources: {event.data['citations']}")
+        elif event.type == "error":
+            print(f"Error: {event.data}")
 
 
 if __name__ == "__main__":

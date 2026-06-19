@@ -1,16 +1,21 @@
-"""Memory layer — materialized memory (panels), episodic memory (journal), and
-conversation memory (conversations + messages), all in one SQLite file.
+"""Panels & memory battery — optional, not part of the core.
+
+Holds three things a dashboard-style host may want, all in one SQLite file:
+materialized memory (panels), episodic memory (journal), and conversation
+memory. Plus the agent-facing helpers ``panel_tools`` (create/archive/list) and
+``resolve`` (spec → live data).
 
 Design:
 - A separate UI db keeps agent memory physically isolated from the host's
   business data, so the agent's write permission is naturally confined here.
 - Panels store *recipes* (declarative specs), not snapshots, so opening a page
   always recomputes from live data.
-- The journal is append-only; the harness writes agent actions, the host writes
-  user actions. A summary can be injected into the system prompt for recall.
+- The journal is append-only. A summary can be injected into the system prompt
+  for episodic recall.
 
-This module is optional: a host with no dashboard can ignore panels entirely and
-use only conversations + journal, or skip memory altogether.
+Optional: a host with no dashboard can ignore this module entirely. Panel column
+expressions go through the restricted-expression engine (``tools.expr``), so the
+LLM may declare a formula but never execute code.
 """
 import json
 import sqlite3
@@ -18,6 +23,7 @@ import time
 from pathlib import Path
 
 from .expr import is_safe_expr, safe_eval
+from .registry import tool
 
 VIZ_TYPES = {"metric-card", "table", "line-chart", "bar-chart", "markdown"}
 REFRESH_TYPES = {"live", "daily", "static"}
@@ -304,16 +310,102 @@ class Memory:
         """Generate a short title after the first message (LLM, with fallback)."""
         title = first_user_msg.strip().replace("\n", " ")[:20]
         try:
-            from .llm import chat
-            r = chat([
-                {"role": "system", "content": "Summarize the user's question into a short 3-8 word title. "
-                                              "Output only the title, no punctuation or quotes."},
-                {"role": "user", "content": first_user_msg[:200]},
+            from ..adapters.openai_llm import OpenAILLM
+            from ..core.models import Message
+            comp = OpenAILLM().complete([
+                Message(role="system", content="Summarize the user's question into a short 3-8 word "
+                        "title. Output only the title, no punctuation or quotes."),
+                Message(role="user", content=first_user_msg[:200]),
             ], temperature=0.3, max_tokens=30)
-            t = (r.get("content") or "").strip().strip("\"'《》「」").replace("\n", "")
+            t = (comp.content or "").strip().strip("\"'《》「」").replace("\n", "")
             if t:
                 title = t[:40]
         except Exception:
             pass
         self.set_title(conv_id, title)
         return title
+
+
+# ── panel data resolver (spec → live data) ───────────────────────────────────
+def _apply_columns(raw, columns):
+    """Apply column declarations row-by-row to the longest array in a tool result
+    (field = direct read, expr = restricted evaluation)."""
+    src = None
+    if isinstance(raw, dict):
+        arrays = [v for v in raw.values() if isinstance(v, list)]
+        if arrays:
+            src = max(arrays, key=len)
+    if src is None:
+        return {"rows": []}
+    rows = []
+    for item in src:
+        if not isinstance(item, dict):
+            continue
+        row = {}
+        for col in columns:
+            title = col["title"]
+            row[title] = safe_eval(col["expr"], item) if "expr" in col else item.get(col["field"], "")
+        rows.append(row)
+    return {"rows": rows}
+
+
+def resolve(panel_id, memory, registry):
+    """Resolve one panel into rendered data. ``memory`` is a :class:`Memory`,
+    ``registry`` is a tool registry. Panels store recipes, so this recomputes
+    from live data every time."""
+    panels = {p["id"]: p for p in memory.list_panels(include_archived=True)}
+    p = panels.get(panel_id)
+    if not p:
+        return {"error": f"panel not found: {panel_id}"}
+    if p.get("kind") == "builtin":
+        return {"id": panel_id, "title": p["title"], "viz": "builtin", "kind": "builtin",
+                "note": p["note"], "data": {"builtin": True}}
+    raw = registry.run(p["query_tool"], json.loads(p["query_args"] or "{}"))
+    if isinstance(raw, dict) and raw.get("error"):
+        return {"id": panel_id, "error": raw["error"]}
+    try:
+        columns = json.loads(p.get("columns") or "[]")
+    except (ValueError, TypeError):
+        columns = []
+    data = _apply_columns(raw, columns) if columns else memory.apply_transform(p["transform"], raw)
+    memory.touch_panel(panel_id)
+    return {"id": panel_id, "title": p["title"], "viz": p["viz"],
+            "kind": p.get("kind", "conversation"), "note": p["note"],
+            "origin": p["origin_conversation"], "created_at": p["created_at"], "data": data}
+
+
+# ── agent-facing panel tools ─────────────────────────────────────────────────
+def panel_tools(memory):
+    """Return the standard panel-management tools (create / archive / list) bound
+    to a :class:`Memory`. Add them to AgentConfig.tools to give the agent
+    "panel as memory" capabilities."""
+    @tool(name="create_panel", writes=True, source="ui.db: panels",
+          description="Persist a conversation insight as a dashboard panel. "
+                      "Only call after the user explicitly agrees.")
+    def create_panel(spec: dict = None, conversation_id: str = "") -> dict:
+        if isinstance(spec, str):
+            try:
+                spec = json.loads(spec)
+            except (ValueError, TypeError):
+                return {"error": "spec must be an object"}
+        return memory.create_panel(spec, conversation_id=conversation_id)
+
+    @tool(name="archive_panel", writes=True, source="ui.db: panels",
+          description="Archive a panel (reversible). Requires user confirmation.")
+    def archive_panel(id: str = "", conversation_id: str = "") -> dict:
+        return memory.archive_panel(id)
+
+    @tool(name="list_panels", source="ui.db: panels",
+          description="List current dashboard panels.")
+    def list_panels(include_archived: bool = False) -> dict:
+        allp = memory.list_panels(include_archived=include_archived)
+        custom = [p for p in allp if p.get("kind") != "builtin"]
+        builtin = [p for p in allp if p.get("kind") == "builtin"]
+        return {
+            "custom_panels": [{"id": p["id"], "title": p["title"], "viz": p["viz"],
+                               "status": p["status"], "note": p.get("note", "")} for p in custom],
+            "builtin_panels": [{"title": p["title"], "tab": p.get("tab", "")} for p in builtin],
+            "summary": f"{len(custom)} custom + {len(builtin)} builtin panels",
+        }
+
+    return [create_panel, archive_panel, list_panels]
