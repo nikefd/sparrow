@@ -116,7 +116,8 @@ def _run_calls(state: RunState, calls: list, deps: Deps, events: list):
 
         if deps.approval_required(call, tool):
             paused = replace(state, pending_approval=call, status="awaiting_approval")
-            return paused, events + [Event("awaiting_approval", {"call": _tc_dict(call)})]
+            return paused, events + [Event("awaiting_approval",
+                                           {"run_id": paused.run_id, "call": _tc_dict(call)})]
 
         out = deps.tools.run(call.name, call.arguments)
         state = _append_tool_result(state, call, out, deps)
