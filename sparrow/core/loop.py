@@ -98,7 +98,7 @@ def _run_calls(state: RunState, calls: list, deps: Deps, events: list):
     early with ``pending_approval`` set) at the first call that needs approval;
     siblings are resumed from message history, never re-executed."""
     for call in calls:
-        if _answered(state, call):
+        if _has_result(state, call):
             continue
         if call.name == schema.ACTIVATE_SKILL:
             state, ev = _activate_skill(state, call, deps)
@@ -249,16 +249,34 @@ def _append_tool_result(state: RunState, call: ToolCall, out, deps: Deps) -> Run
     return replace(state, messages=state.messages + [msg], citations=citations)
 
 
-def _answered(state: RunState, call: ToolCall) -> bool:
-    return any(m.role == "tool" and m.tool_call_id == call.id for m in state.messages)
+def _last_assistant_idx(state: RunState):
+    """Index of the most recent assistant turn that issued tool calls, or None."""
+    for i in range(len(state.messages) - 1, -1, -1):
+        m = state.messages[i]
+        if m.role == "assistant" and m.tool_calls:
+            return i
+    return None
+
+
+def _has_result(state: RunState, call: ToolCall) -> bool:
+    """Has this call been answered *within its own turn*? Scoped to tool results
+    that appear after the issuing assistant turn, so a same tool_call_id reused in
+    an earlier turn never reads as a false positive."""
+    idx = _last_assistant_idx(state)
+    if idx is None:
+        return False
+    return any(m.role == "tool" and m.tool_call_id == call.id
+               for m in state.messages[idx + 1:])
 
 
 def _unanswered_calls(state: RunState) -> list:
-    """Tool calls from the most recent assistant turn that still lack a result."""
-    last = next((m for m in reversed(state.messages) if m.role == "assistant" and m.tool_calls), None)
-    if not last:
+    """Tool calls from the most recent assistant turn that still lack a result
+    (scoped to that turn — see :func:`_has_result`)."""
+    idx = _last_assistant_idx(state)
+    if idx is None:
         return []
-    return [tc for tc in last.tool_calls if not _answered(state, tc)]
+    answered = {m.tool_call_id for m in state.messages[idx + 1:] if m.role == "tool"}
+    return [tc for tc in state.messages[idx].tool_calls if tc.id not in answered]
 
 
 def _truncate(s: str, limit: int) -> str:

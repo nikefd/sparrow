@@ -101,6 +101,24 @@ def test_structured_output_through_facade():
     assert final.data["structured"] == {"answer": 42}
 
 
+def test_approval_pauses_even_with_reused_tool_call_id():
+    # regression: a skill-gated write tool whose id collides with the earlier
+    # activate_skill call must still pause (answered-check is scoped to its turn).
+    from sparrow.core.models import Skill
+
+    @tool(description="del", source="fs", writes=True)
+    def delete_file(name: str = "", conversation_id: str = "") -> dict:
+        return {"ok": True}
+
+    skill = Skill(name="fs", when="files", instructions="x", tools=["delete_file"])
+    agent = Agent(AgentConfig(system_prompt="sys", tools=[delete_file], skills=[skill]),
+                  llm=FakeLLM([comp_tool("activate_skill", {"name": "fs"}, id="dup"),
+                               comp_tool("delete_file", {"name": "f"}, id="dup")]),
+                  store=MemoryStore(), approver=FakeApprover(Decision(verdict="approve")))
+    events = [e.type for e in agent.run([{"role": "user", "content": "go"}], run_id="r6")]
+    assert events == ["skill_activated", "tool_call", "awaiting_approval"]
+
+
 def test_resume_unknown_run_raises():
     agent = Agent(AgentConfig(system_prompt="sys"), llm=FakeLLM([]), store=MemoryStore())
     try:
