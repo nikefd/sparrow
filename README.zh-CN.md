@@ -92,6 +92,20 @@ config = AgentConfig(
 3. **记忆覆盖所有 actor。** 流水记录人做的、AI 做的、系统做的——agent 的
    世界观才完整。
 
+## 文档
+
+本 README 是快速导览。要看全貌——引擎内部、三层记忆模型、受限表达式沙箱、以及
+如何扩展或发布 sparrow——见 [`llmdoc/`](llmdoc/index.md)，一套同时面向人和 AI
+agent 的文档体系。从 [`llmdoc/index.md`](llmdoc/index.md) 开始。
+
+| 我想... | 从这里开始 |
+|---|---|
+| 端到端搭一个能跑的 agent | [guides/how-to-build-an-agent.md](llmdoc/guides/how-to-build-an-agent.md) |
+| 理解 ReAct 循环与事件流 | [architecture/engine-architecture.md](llmdoc/architecture/engine-architecture.md) |
+| 理解记忆与面板 | [architecture/memory-architecture.md](llmdoc/architecture/memory-architecture.md) |
+| 查公共 API | [reference/api-reference.md](llmdoc/reference/api-reference.md) |
+| 发布到 PyPI | [guides/how-to-release.md](llmdoc/guides/how-to-release.md) |
+
 ## 状态
 
 `v0.1` —— 从两个生产 agent（A股量化助手 + AI 前沿追踪）抽取并通用化而来。

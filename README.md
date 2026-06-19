@@ -100,6 +100,21 @@ expression engine:
 3. **Memory covers every actor.** The journal records what the user did, what
    the agent did, and what the system did — so the agent's worldview is complete.
 
+## Documentation
+
+This README is the quick tour. For the full picture — engine internals, the
+three-tier memory model, the restricted-expression sandbox, and how to extend or
+release sparrow — see [`llmdoc/`](llmdoc/index.md), a docs system written for
+both humans and AI agents. Start at [`llmdoc/index.md`](llmdoc/index.md).
+
+| I want to... | Start here |
+|---|---|
+| Build a working agent end-to-end | [guides/how-to-build-an-agent.md](llmdoc/guides/how-to-build-an-agent.md) |
+| Understand the ReAct loop & event stream | [architecture/engine-architecture.md](llmdoc/architecture/engine-architecture.md) |
+| Understand memory & panels | [architecture/memory-architecture.md](llmdoc/architecture/memory-architecture.md) |
+| Look up the public API | [reference/api-reference.md](llmdoc/reference/api-reference.md) |
+| Release to PyPI | [guides/how-to-release.md](llmdoc/guides/how-to-release.md) |
+
 ## Status
 
 `v0.1` — extracted from two production agents (a quant-trading assistant and an
